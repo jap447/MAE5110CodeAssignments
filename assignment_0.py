@@ -19,7 +19,16 @@ initial_state = np.array([np.pi / 4, 0.0])
 timesteps = np.logspace(-5, -2, 20)
 sim_time = 5.0
 
+max_error = 1e-3
+
 energy_errors = []
+
+final_timestep = None
+final_time_traj = None
+final_kinetic_energy = None
+final_potential_energy = None
+final_total_energy = None
+
 
 for timestep in timesteps:
 
@@ -47,24 +56,40 @@ for timestep in timesteps:
 
     print(f"dt = {timestep:.6f} s, max energy error = {energy_error:.6e} J")
 
-#    plt.figure()
-#    plt.plot(time_traj, potential_energy, label="Potential energy")
-#    plt.plot(time_traj, kinetic_energy, label="Kinetic energy")
-#    plt.plot(time_traj, potential_energy + kinetic_energy, label="Total energy")
-#    plt.xlabel("Time (s)")
-#    plt.ylabel("Energy (J)")
-#    plt.title("Pendulum energy")
-#    plt.legend()
-#    plt.tight_layout()
-#    plt.show()
+    if energy_error > max_error:
+        print("\nEnergy error threshold exceeded.")
+        print(f"First failing timestep: {timestep:.6f} s")
+
+        break
+
+    final_timestep = timestep
+    final_time_traj = time_traj
+    final_kinetic_energy = kinetic_energy
+    final_potential_energy = potential_energy
+    final_total_energy = total_energy
+
+print(f"Largest acceptable timestep: "f"{final_timestep:.6f} s")
 
 plt.figure()
-plt.plot(timesteps, energy_errors, "o-")
+plt.plot(final_time_traj, final_potential_energy, label="Potential energy")
+plt.plot(final_time_traj, final_kinetic_energy, label="Kinetic energy")
+plt.plot(final_time_traj, final_potential_energy + final_kinetic_energy, label="Total energy")
+plt.xlabel("Time (s)")
+plt.ylabel("Energy (J)")
+plt.title("Pendulum energy")
+plt.legend()
+plt.tight_layout()
+
+tested_timesteps = timesteps[:len(energy_errors)]
+
+plt.figure()
+plt.plot(tested_timesteps, energy_errors, "o-")
+plt.axhline(max_error, linestyle="--", label="Error threshold")
 plt.xlabel("Timestep (s)")
 plt.ylabel("Maximum energy error (J)")
-plt.title("Energy error vs. timestep")
+plt.title("Energy Error vs. Timestep")
 plt.grid(True)
+plt.legend()
 plt.tight_layout()
-plt.show()
 
 # TODO: make a phase portrait plot
