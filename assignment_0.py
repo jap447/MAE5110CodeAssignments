@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from models import pendulum as model
+from integrators import explicit_euler as integrator
 
 # Basic simulation of the pendulum
 
@@ -38,10 +39,7 @@ for timestep in timesteps:
     state_traj[:, 0] = initial_state
 
     # simulation loop
-    for step, t in enumerate(time_traj[:-1]):
-        state_traj[:, step + 1] = state_traj[:, step] + timestep * model.dynamics(
-            t, state_traj[:, step], params
-        )
+    state_traj = integrator.euler_int(model.dynamics, time_traj, state_traj, timestep, params)
 
     # sanity check the energies: since there is no actuation, and no damping, total energy should stay
     # constant. If we turn on the damping coefficient, it should slowly bleed out energy until it comes to
@@ -91,6 +89,14 @@ plt.title("Energy Error vs. Timestep")
 plt.grid(True)
 plt.legend()
 plt.tight_layout()
-plt.show()
 
 # TODO: make a phase portrait plot
+
+plt.figure()
+plt.plot(state_traj[0, :], state_traj[1, :])
+plt.xlabel("Angle (rad)")
+plt.ylabel("Angular velocity (rad/s)")
+plt.title("Phase portrait")
+plt.grid(True)
+plt.tight_layout()
+plt.show()
