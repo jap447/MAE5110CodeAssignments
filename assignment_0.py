@@ -16,7 +16,7 @@ params = {
 # some set-up
 initial_state = np.array([np.pi / 4, 0.0])
 
-timesteps = np.logspace(-5, -2, 20)
+timesteps = np.logspace(-5, -2, 4)
 sim_time = 5.0
 
 max_error = 1e-3
@@ -83,7 +83,7 @@ plt.tight_layout()
 tested_timesteps = timesteps[:len(energy_errors)]
 
 plt.figure()
-plt.plot(tested_timesteps, energy_errors, "o-")
+plt.loglog(tested_timesteps, energy_errors, "o-")
 plt.axhline(max_error, linestyle="--", label="Error threshold")
 plt.xlabel("Timestep (s)")
 plt.ylabel("Maximum energy error (J)")
@@ -91,5 +91,6 @@ plt.title("Energy Error vs. Timestep")
 plt.grid(True)
 plt.legend()
 plt.tight_layout()
+plt.show()
 
 # TODO: make a phase portrait plot
