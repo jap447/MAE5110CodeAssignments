@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from models import pendulum as model
-from integrators import explicit_euler as integrator
+from integrators import rk4 as integrator
 
 # Basic simulation of the pendulum
 
@@ -17,7 +17,7 @@ params = {
 # some set-up
 initial_state = np.array([np.pi / 4, 0.0])
 
-timesteps = np.logspace(-5, -2, 4)
+timesteps = np.logspace(-5, 0, 6)
 sim_time = 5.0
 
 max_error = 1e-3
@@ -39,7 +39,7 @@ for timestep in timesteps:
     state_traj[:, 0] = initial_state
 
     # simulation loop
-    state_traj = integrator.euler_int(model.dynamics, time_traj, state_traj, timestep, params)
+    state_traj = integrator.rk4_int(model.dynamics, time_traj, state_traj, timestep, params)
 
     # sanity check the energies: since there is no actuation, and no damping, total energy should stay
     # constant. If we turn on the damping coefficient, it should slowly bleed out energy until it comes to
