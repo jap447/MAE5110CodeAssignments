@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import timeit
 
 from models import ball as model
-from integrators import rk4 as integrator
 
 # Basic simulation of the pendulum
 
@@ -26,7 +25,18 @@ state_traj = np.zeros((2, n_timesteps))
 state_traj[:, 0] = initial_state
 
 # simulation loop
-state_traj = integrator.rk4_single(model.dynamics, time_traj, state_traj, timestep, params)
+dt = timestep
+for step, t in enumerate(time_traj[:-1]):
+        k1 = dt * model.dynamics(t, state_traj[:, step], params)
+        k2 = dt * model.dynamics(t + dt / 2, state_traj[:, step] + k1 / 2, params)
+        k3 = dt * model.dynamics(t + dt / 2, state_traj[:, step] + k2 / 2, params)
+        k4 = dt * model.dynamics(t + dt, state_traj[:, step] + k3, params)
+        state_traj[:, step + 1] = state_traj[:, step] + (k1 + 2 * k2 + 2 * k3 + k4) / 6
+        
+        # Handle bounces after the step completes
+        if state_traj[0, step + 1] <= 0 and state_traj[1, step + 1] < 0:
+            state_traj[1, step + 1] = -params["restitution_coeff"] * state_traj[1, step + 1]
+            state_traj[0, step + 1] = 0
 
 # sanity check the energies: since there is no actuation, and no damping, total energy should stay
 # constant. If we turn on the damping coefficient, it should slowly bleed out energy until it comes to
