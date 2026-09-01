@@ -38,6 +38,7 @@ for step, t in enumerate(time_traj[:-1]):
             state_traj[1, step + 1] = -params["restitution_coeff"] * state_traj[1, step + 1]
             state_traj[0, step + 1] = 0
 
+
 # sanity check the energies: since there is no actuation, and no damping, total energy should stay
 # constant. If we turn on the damping coefficient, it should slowly bleed out energy until it comes to
 # a stand-still.
