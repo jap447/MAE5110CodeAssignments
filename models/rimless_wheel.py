@@ -31,15 +31,14 @@ def reset_impact(state, params):
     return reset_state
 
 
-def calculate_energy(state, params):
-    """Compute energies for a state ``(2,)`` or trajectory ``(2, N)``."""
+def calculate_energy(state, height_traj, params):
     gravity = params["gravity"]
     length = params["length"]
     mass = params["mass"]
 
     angle = state[0]  # indexes entire row "vectorized" if state is (2, N)
     angular_velocity = state[1]
-
+    
     kinetic_energy = 0.5 * mass * (length * angular_velocity) ** 2
-    potential_energy = mass * gravity * length * np.cos(angle)
+    potential_energy = mass * gravity * (length * np.cos(angle) + height_traj)
     return kinetic_energy, potential_energy
