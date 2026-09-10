@@ -1,22 +1,15 @@
 def rk4(dynamics, time, state, timestep, params):
     """Advance one state by one fixed fourth-order Runge-Kutta step."""
-    first_slope = dynamics(time, state, params)
-    second_slope = dynamics(
-        time + timestep / 2,
-        state + timestep * first_slope / 2,
+    k1= dynamics(time, state, params)
+    k2 = dynamics(time + timestep / 2, state + timestep * k1 / 2,
         params,
     )
-    third_slope = dynamics(
-        time + timestep / 2,
-        state + timestep * second_slope / 2,
+    k3 = dynamics(time + timestep / 2, state + timestep * k2 / 2,
         params,
     )
-    fourth_slope = dynamics(
-        time + timestep,
-        state + timestep * third_slope,
+    k4 = dynamics(time + timestep,state + timestep * k3,
         params,
     )
+    rk4state = state + (timestep / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
 
-    return state + timestep * (
-        first_slope + 2 * second_slope + 2 * third_slope + fourth_slope
-    ) / 6
+    return rk4state
