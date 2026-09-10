@@ -37,7 +37,7 @@ height_traj = np.zeros(n_timesteps)
 step_count = 0
 
 # simulation
-# First, the system behaves like a simple pendulum until impact of the next spoke. (rk4 method)
+# First, the system behaves like a simple pendulum until impact of the next spoke.
 
 for step, t in enumerate(time_traj[:-1]):
     state_traj[:, step + 1] = integrator(model.pendulum_dynamics,
