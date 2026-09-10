@@ -16,10 +16,19 @@ def pendulum_dynamics(t, state, params):
     state_derivative = np.array([angular_velocity, angular_acceleration])
     return state_derivative
 
-def impact_dynamics(t, state, params):
 
-    state_derivative = np.array([angular_velocity, angular_acceleration])
-    return state_derivative
+def detect_event(state, params):
+    touch_angle = np.pi / params["N"] + params["Incline"]
+    return state[0] >= touch_angle
+
+
+def reset_impact(state, params):
+    alpha = np.pi / params["N"]
+    touch_angle = alpha - params["Incline"]
+    reset_state = np.array(state, copy=True)
+    reset_state[0] = -touch_angle
+    reset_state[1] = np.cos(2 * alpha) * state[1]
+    return reset_state
 
 
 def calculate_energy(state, params):

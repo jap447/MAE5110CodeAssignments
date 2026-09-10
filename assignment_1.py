@@ -21,8 +21,9 @@ params = {
 N = params["N"]
 gamma = params["Incline"]
 alpha = np.pi / N
+touch_angle = alpha - gamma
 
-initial_state = np.array([-(alpha - gamma), 1.0])  # [theta, theta_dot]
+initial_state = np.array([-(touch_angle), 1.0])  # [theta, theta_dot]
 
 timestep = 1e-5
 sim_time = 10.0
@@ -33,11 +34,17 @@ state_traj = np.zeros((2, n_timesteps))
 state_traj[:, 0] = initial_state
 
 # simulation
-# First, the system behaves like a simple pendulum until impact of the next spoke.
+# First, the system behaves like a simple pendulum until impact of the next spoke. (rk4 method)
+
 for step, t in enumerate(time_traj[:-1]):
-    state_traj[:, step + 1] = state_traj[:, step] + timestep * model.dynamics(
-        t, state_traj[:, step], params
-    )
+        state_traj[:, step + 1] = rk4(model.pendulum_dynamics, 
+            t, state_traj[:, step], timestep,params,)
+        
+        # Handle bounces after the step completes
+        if model.detect_event(state_traj[:, step + 1], params):
+            state_traj[:, step + 1] = model.reset_impact(
+                state_traj[:, step + 1], params
+            )
 
 
 # Energy Sanity check: since there is no actuation, and no damping, total energy should stay constant. If we turn on the damping coefficient, it should slowly bleed out energy until it comes to a stand-still.
