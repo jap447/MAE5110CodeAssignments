@@ -27,20 +27,22 @@ initial_state = np.array([-(post_impact_angle), 1])  # [theta, theta_dot]
 
 timestep = 1e-2
 impact_timestep = 1e-5
-sim_time = 15.0
+sim_time = 20.0
 
 n_timesteps = int(sim_time / timestep) + 1
 time_traj = np.arange(n_timesteps) * timestep
 
 # Analysis setup
 # theta_values = np.linspace(-1, 1, 50)
-theta_values = np.linspace(-(alpha - gamma), alpha + gamma,20)
-omega_values = np.linspace(0.0, 5.0, 20)
+theta_values = np.linspace(-(alpha - gamma), alpha + gamma,50)
+omega_values = np.linspace(0.0, 5.0, 50)
 theta_grid, omega_grid = np.meshgrid(theta_values, omega_values)
 roa = np.zeros_like(theta_grid, dtype=int)  # region of attraction
-# 0 = failed/no walking
-# 1 = converged walking limit cycle
-# 2 = transient/undecided
+# 0 = failed before first impact
+# 1 = took exactly one step, then failed
+# 2 = took multiple steps, then failed
+# 3 = converged to period-1 walking
+# 4 = other / unresolved
 
 # simulation
 # First, the system behaves like a simple pendulum until impact of the next spoke.
@@ -55,9 +57,12 @@ for i in range(theta_grid.shape[0]):
 
         impact_velocities = []
         converged = False
+        failed  = False
 
         for step, t in enumerate(time_traj[:-1]):
 
+            current_state = state_traj[:, step]
+            
             next_state = integrator(model.pendulum_dynamics, t, state_traj[:, step],
                 timestep, params)
 
@@ -75,11 +80,28 @@ for i in range(theta_grid.shape[0]):
                 if model.walking_converged(impact_velocities):
                     converged = True
                     break
+            else:
+                omega_current = current_state[1]
+                omega_next = next_state[1]
 
+                if (omega_current >= 0 and omega_next < 0.0):
+                    failed = True
+                    break
         if converged:
-            roa[i, j] = 1
+            clasification = 3
+        elif failed:
+            n_impacts  = len(impact_velocities)
+            if n_impacts == 0:
+                clasification = 0
+            elif n_impacts == 1:
+                clasification = 1
+            else:
+                clasification = 2
         else:
-            roa[i, j] = 0
+            clasification = 4
+
+        roa[i, j] = clasification
+
 
 # Energy Sanity check
 
@@ -88,11 +110,46 @@ total_energy = kinetic_energy + potential_energy
 
 from matplotlib.colors import BoundaryNorm, ListedColormap
 
-plt.figure()
+cmap = ListedColormap([
+    "black",       # 0 - fails before first step
+    "royalblue",   # 1 - one step then fails
+    "orange",      # 2 - multiple steps then fails
+    "purple",    # 3 - converged walking
+    "gray"         # 4 - unresolved
+])
 
-plt.pcolormesh(theta_grid, omega_grid, roa, shading="auto")
+norm = BoundaryNorm(
+    [-0.5, 0.5, 1.5, 2.5, 3.5, 4.5],
+    cmap.N
+)
+
+plt.figure(figsize=(10, 7))
+
+image = plt.pcolormesh(
+    theta_grid,
+    omega_grid,
+    roa,
+    cmap=cmap,
+    norm=norm,
+    shading="auto"
+)
+
+colorbar = plt.colorbar(
+    image,
+    ticks=[0, 1, 2, 3, 4]
+)
+
+colorbar.ax.set_yticklabels([
+    "failed before first impact",
+    "one step then failed",
+    "multiple steps then failed",
+    "walking limit cycle",
+    "unresolved"
+])
+
 plt.xlabel(r"$\theta$ (rad)")
 plt.ylabel(r"$\dot{\theta}$ (rad/s)")
-plt.title("Estimated Region of Attraction")
+plt.title("Rimless Wheel Long-Term Behavior")
 
+plt.tight_layout()
 plt.show()
