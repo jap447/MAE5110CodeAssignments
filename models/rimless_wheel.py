@@ -17,16 +17,20 @@ def pendulum_dynamics(t, state, params):
     return state_derivative
 
 
-def detect_event(state, params):
-    touch_angle = np.pi / params["N"] + params["Incline"]
-    return state[0] >= touch_angle
+def detect_event(previous_state, state, params):
+    event_angle = np.pi / params["N"] + params["Incline"]
+    return (
+        previous_state[0] < event_angle
+        and state[0] >= event_angle
+        and state[1] > 0
+    )
 
 
 def reset_impact(state, params):
     alpha = np.pi / params["N"]
-    touch_angle = alpha - params["Incline"]
+    post_impact_angle = alpha - params["Incline"]
     reset_state = np.array(state, copy=True)
-    reset_state[0] = -touch_angle
+    reset_state[0] = -post_impact_angle
     reset_state[1] = np.cos(2 * alpha) * state[1]
     return reset_state
 
@@ -42,3 +46,29 @@ def calculate_energy(state, height_traj, params):
     kinetic_energy = 0.5 * mass * (length * angular_velocity) ** 2
     potential_energy = mass * gravity * (length * np.cos(angle) + height_traj)
     return kinetic_energy, potential_energy
+
+def walking_converged(impact_velocities, window=5, tol=1e-3):
+    if len(impact_velocities) < window:
+        return False
+
+    recent = np.asarray(impact_velocities[-window:])
+    return np.max(np.abs(np.diff(recent))) < tol
+
+def refine_impact(previous_state, t, coarse_dt, fine_dt, params, integrator):
+
+    state = np.array(previous_state, copy=True)
+    local_t = t
+
+    n_fine_steps = int(np.ceil(coarse_dt / fine_dt))
+
+    for _ in range(n_fine_steps):
+
+        next_state = integrator(pendulum_dynamics, local_t, state, fine_dt, params)
+
+        if detect_event(state, next_state, params):
+            return next_state
+
+        state = next_state
+        local_t += fine_dt
+
+    return state
