@@ -35,7 +35,7 @@ time_traj = np.arange(n_timesteps) * timestep
 # Analysis setup
 # theta_values = np.linspace(-1, 1, 50)
 theta_values = np.linspace(-(alpha - gamma), alpha + gamma,50)
-omega_values = np.linspace(0.0, 5.0, 50)
+omega_values = np.linspace(0.0, 2.5, 50)
 theta_grid, omega_grid = np.meshgrid(theta_values, omega_values)
 roa = np.zeros_like(theta_grid, dtype=int)  # region of attraction
 # 0 = failed before first impact
@@ -111,10 +111,10 @@ total_energy = kinetic_energy + potential_energy
 from matplotlib.colors import BoundaryNorm, ListedColormap
 
 cmap = ListedColormap([
-    "black",       # 0 - fails before first step
+    "orange",       # 0 - fails before first step
     "royalblue",   # 1 - one step then fails
-    "orange",      # 2 - multiple steps then fails
-    "purple",    # 3 - converged walking
+    "red",      # 2 - multiple steps then fails
+    "seagreen",    # 3 - converged walking
     "gray"         # 4 - unresolved
 ])
 
