@@ -106,3 +106,30 @@ def next_impact_velocity(
 
         state = next_state
         t += timestep
+
+def estimate_floquet(fixed_point, epsilon, params, timestep, impact_timestep, integrator, post_impact_angle):
+    P_minus = next_impact_velocity(
+        fixed_point - epsilon,
+        params,
+        timestep,
+        impact_timestep,
+        integrator,
+        post_impact_angle,
+        pendulum_dynamics,
+        detect_event,
+        refine_impact,
+        reset_impact,
+    )
+    P_plus = next_impact_velocity(
+        fixed_point + epsilon,
+        params,
+        timestep,
+        impact_timestep,
+        integrator,
+        post_impact_angle,
+        pendulum_dynamics,
+        detect_event,
+        refine_impact,
+        reset_impact,
+    )
+    return (P_plus - P_minus) / (2 * epsilon)
