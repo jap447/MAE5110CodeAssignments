@@ -197,6 +197,4 @@ def compute_roa(theta_grid, omega_grid, n_timesteps, time_traj, timestep, impact
 
         roa[i, j] = classification
 
-        roa_fraction = np.mean(roa)
-
-    return roa, roa_fraction
+    return roa
