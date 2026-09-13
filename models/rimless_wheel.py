@@ -133,3 +133,70 @@ def estimate_floquet(fixed_point, epsilon, params, timestep, impact_timestep, in
         reset_impact,
     )
     return (P_plus - P_minus) / (2 * epsilon)
+
+def compute_roa(theta_grid, omega_grid, n_timesteps, time_traj, timestep, impact_timestep, params, integrator, model):
+    roa = np.zeros(theta_grid.shape, dtype=int)
+    for i in range(theta_grid.shape[0]):
+        for j in range(theta_grid.shape[1]):
+            state_traj = np.zeros((2, n_timesteps))
+            height_traj = np.zeros(n_timesteps)
+            state_traj[:, 0] = [theta_grid[i, j], omega_grid[i, j]]
+
+            impact_velocities = []
+            converged = False
+            failed = False
+
+            for step, t in enumerate(time_traj[:-1]):
+                current_state = state_traj[:, step]
+                next_state = integrator(
+                    model.pendulum_dynamics,
+                    t,
+                    state_traj[:, step],
+                    timestep,
+                    params,
+                )
+
+                state_traj[:, step + 1] = next_state
+
+                if model.detect_event(state_traj[:, step], next_state, params):
+                    impact_state = model.refine_impact(
+                        state_traj[:, step],
+                        t,
+                        timestep,
+                        impact_timestep,
+                        params,
+                        integrator,
+                    )
+
+                    state_traj[:, step + 1] = model.reset_impact(impact_state, params)
+                    impact_velocities.append(state_traj[1, step + 1])
+
+                    if model.walking_converged(impact_velocities):
+                        converged = True
+                        break
+                else:
+                    omega_current = current_state[1]
+                    omega_next = next_state[1]
+
+                    if omega_current >= 0 and omega_next < 0.0:
+                        failed = True
+                        break
+
+            if converged:
+                classification = 3
+            elif failed:
+                n_impacts = len(impact_velocities)
+                if n_impacts == 0:
+                    classification = 0
+                elif n_impacts == 1:
+                    classification = 1
+                else:
+                    classification = 2
+            else:
+                classification = 4
+
+        roa[i, j] = classification
+
+        roa_fraction = np.mean(roa)
+
+    return roa, roa_fraction
