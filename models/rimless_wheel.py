@@ -2,34 +2,22 @@ import numpy as np
 
 
 def pendulum_dynamics(t, state, params):
-    gravity = params["gravity"]
-    length = params["length"]
-    mass = params["mass"]
-
-    angle = state[0]
-    angular_velocity = state[1]
-
-    angular_acceleration = (
-        mass * gravity * length * np.sin(angle)
-    ) / (mass * length**2)
-
-    state_derivative = np.array([angular_velocity, angular_acceleration])
-    return state_derivative
+    """Return the angular velocity and acceleration of the inverted pendulum."""
+    angle, angular_velocity = state
+    angular_acceleration = params["gravity"] / params["length"] * np.sin(angle)
+    return np.array([angular_velocity, angular_acceleration])
 
 
 def detect_event(previous_state, state, params):
+    """Detect a downhill crossing of the next spoke contact angle."""
     event_angle = np.pi / params["N"] + params["Incline"]
-    return (
-        previous_state[0] < event_angle
-        and state[0] >= event_angle
-        and state[1] > 0
-    )
+    return previous_state[0] < event_angle and state[0] >= event_angle and state[1] > 0
 
 
 def reset_impact(state, params):
     alpha = np.pi / params["N"]
     post_impact_angle = alpha - params["Incline"]
-    reset_state = np.array(state, copy=True)
+    reset_state = np.array(state, dtype=float, copy=True)
     reset_state[0] = -post_impact_angle
     reset_state[1] = np.cos(2 * alpha) * state[1]
     return reset_state
@@ -81,10 +69,10 @@ def next_impact_velocity(
     impact_timestep,
     integrator,
     post_impact_angle,
-    pendulum_dynamics_func,
-    detect_event_func,
-    refine_impact_func,
-    reset_impact_func,
+    pendulum_dynamics_func=pendulum_dynamics,
+    detect_event_func=detect_event,
+    refine_impact_func=refine_impact,
+    reset_impact_func=reset_impact,
 ):
     state = np.array([-(post_impact_angle), current_velocity], dtype=float)
     t = 0.0
@@ -107,60 +95,72 @@ def next_impact_velocity(
         state = next_state
         t += timestep
 
-def estimate_floquet(fixed_point, epsilon, params, timestep, impact_timestep, integrator, post_impact_angle):
-    P_minus = next_impact_velocity(
+
+def estimate_floquet(
+    fixed_point,
+    epsilon,
+    params,
+    timestep,
+    impact_timestep,
+    integrator,
+    post_impact_angle,
+):
+    velocity_minus = next_impact_velocity(
         fixed_point - epsilon,
         params,
         timestep,
         impact_timestep,
         integrator,
         post_impact_angle,
-        pendulum_dynamics,
-        detect_event,
-        refine_impact,
-        reset_impact,
     )
-    P_plus = next_impact_velocity(
+    velocity_plus = next_impact_velocity(
         fixed_point + epsilon,
         params,
         timestep,
         impact_timestep,
         integrator,
         post_impact_angle,
-        pendulum_dynamics,
-        detect_event,
-        refine_impact,
-        reset_impact,
     )
-    return (P_plus - P_minus) / (2 * epsilon)
+    return (velocity_plus - velocity_minus) / (2 * epsilon)
 
-def compute_roa(theta_grid, omega_grid, n_timesteps, time_traj, timestep, impact_timestep, params, integrator, model):
+
+def compute_roa(
+    theta_grid,
+    omega_grid,
+    n_timesteps,
+    time_traj,
+    timestep,
+    impact_timestep,
+    params,
+    integrator,
+    model,
+):
+    """Classify each initial state: 0/1/2 failed, 3 walking, 4 unresolved.
+
+    Failure codes count impacts before reversal, capped at two.
+    Only the current state is retained; full trajectories are unnecessary.
+    """
     roa = np.zeros(theta_grid.shape, dtype=int)
     for i in range(theta_grid.shape[0]):
         for j in range(theta_grid.shape[1]):
-            state_traj = np.zeros((2, n_timesteps))
-            height_traj = np.zeros(n_timesteps)
-            state_traj[:, 0] = [theta_grid[i, j], omega_grid[i, j]]
+            state = np.array([theta_grid[i, j], omega_grid[i, j]], dtype=float)
 
             impact_velocities = []
             converged = False
             failed = False
 
-            for step, t in enumerate(time_traj[:-1]):
-                current_state = state_traj[:, step]
+            for t in time_traj[: n_timesteps - 1]:
                 next_state = integrator(
                     model.pendulum_dynamics,
                     t,
-                    state_traj[:, step],
+                    state,
                     timestep,
                     params,
                 )
 
-                state_traj[:, step + 1] = next_state
-
-                if model.detect_event(state_traj[:, step], next_state, params):
+                if model.detect_event(state, next_state, params):
                     impact_state = model.refine_impact(
-                        state_traj[:, step],
+                        state,
                         t,
                         timestep,
                         impact_timestep,
@@ -168,19 +168,21 @@ def compute_roa(theta_grid, omega_grid, n_timesteps, time_traj, timestep, impact
                         integrator,
                     )
 
-                    state_traj[:, step + 1] = model.reset_impact(impact_state, params)
-                    impact_velocities.append(state_traj[1, step + 1])
+                    next_state = model.reset_impact(impact_state, params)
+                    impact_velocities.append(next_state[1])
 
                     if model.walking_converged(impact_velocities):
                         converged = True
                         break
                 else:
-                    omega_current = current_state[1]
+                    omega_current = state[1]
                     omega_next = next_state[1]
 
                     if omega_current >= 0 and omega_next < 0.0:
                         failed = True
                         break
+
+                state = next_state
 
             if converged:
                 classification = 3
@@ -195,6 +197,6 @@ def compute_roa(theta_grid, omega_grid, n_timesteps, time_traj, timestep, impact
             else:
                 classification = 4
 
-        roa[i, j] = classification
+            roa[i, j] = classification
 
     return roa

@@ -12,7 +12,7 @@ params = {
     "mass": 0.2,  # Wheel mass (kg)
     "restitution_coeff": 0.0,  # restitution coefficient (-)
     "N": 8,  # number of spokes (-)
-    "Incline": np.pi/24,  # Incline angle (rad)
+    "Incline": np.pi / 24,  # Incline angle (rad)
 }
 
 # some set-up
@@ -40,22 +40,28 @@ step_count = 0
 # First, the system behaves like a simple pendulum until impact of the next spoke.
 
 for step, t in enumerate(time_traj[:-1]):
-
-    state_traj[:, step + 1] = integrator(model.pendulum_dynamics,
-        t, state_traj[:, step], timestep,params,)
+    state_traj[:, step + 1] = integrator(
+        model.pendulum_dynamics,
+        t,
+        state_traj[:, step],
+        timestep,
+        params,
+    )
     height_traj[step + 1] = height_traj[step]
 
     # Handle bounces after the step completes
     if model.detect_event(state_traj[:, step], state_traj[:, step + 1], params):
         state_traj[:, step + 1] = model.reset_impact(state_traj[:, step + 1], params)
 
-        step_count += 1 
+        step_count += 1
         height_traj[step + 1] = -step_count * step_drop
 
 
 # Energy Sanity check
 
-kinetic_energy, potential_energy = model.calculate_energy(state_traj, height_traj, params)
+kinetic_energy, potential_energy = model.calculate_energy(
+    state_traj, height_traj, params
+)
 total_energy = kinetic_energy + potential_energy
 
 plt.figure()

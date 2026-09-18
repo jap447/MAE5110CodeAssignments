@@ -11,7 +11,7 @@ params = {
     "mass": 0.2,  # Wheel mass (kg)
     "restitution_coeff": 0.0,  # restitution coefficient (-)
     "N": 8,  # number of spokes (-)
-    "Incline": np.pi/24,  # Incline angle (rad)
+    "Incline": np.pi / 24,  # Incline angle (rad)
 }
 
 N = params["N"]
@@ -76,8 +76,15 @@ epsilons = [5e-1, 1e-1, 5e-2, 1e-2, 5e-3, 1e-3, 5e-4, 1e-4]
 floquet_estimates = []
 
 for epsilon in epsilons:
-
-    floquet = model.estimate_floquet(fixed_point, epsilon, params, timestep, impact_timestep, integrator, post_impact_angle)
+    floquet = model.estimate_floquet(
+        fixed_point,
+        epsilon,
+        params,
+        timestep,
+        impact_timestep,
+        integrator,
+        post_impact_angle,
+    )
     floquet_estimates.append(floquet)
 
     print(f"Epsilon: {epsilon:.5f}, Floquet estimate: {floquet:.6f}")
@@ -86,7 +93,9 @@ for epsilon in epsilons:
 # mu ≈ (P(v + eps) - P(v - eps)) / (2 eps)
 # This is the approximate Floquet multiplier for the rolling limit cycle.
 eps = 1e-3
-mu = model.estimate_floquet(fixed_point, eps, params, timestep, impact_timestep, integrator, post_impact_angle) 
+mu = model.estimate_floquet(
+    fixed_point, eps, params, timestep, impact_timestep, integrator, post_impact_angle
+)
 
 
 print(f"Estimated fixed point: {fixed_point:.6f} rad/s")
@@ -99,7 +108,13 @@ min_val = min(np.min(v_n), np.min(v_np1))
 max_val = max(np.max(v_n), np.max(v_np1))
 identity = np.linspace(min_val, max_val, 200)
 plt.plot(identity, identity, "k--", label="identity")
-plt.axvline(fixed_point, color="tab:red", linestyle="-.", linewidth=1.5, label=f"fixed point = {fixed_point:.4f}")
+plt.axvline(
+    fixed_point,
+    color="tab:red",
+    linestyle="-.",
+    linewidth=1.5,
+    label=f"fixed point = {fixed_point:.4f}",
+)
 plt.axhline(fixed_point, color="tab:red", linestyle="-.", linewidth=1.5)
 plt.xlabel(r"$\dot{\theta}_n$ (rad/s)")
 plt.ylabel(r"$\dot{\theta}_{n+1}$ (rad/s)")
@@ -110,7 +125,9 @@ plt.tight_layout()
 plt.show()
 
 # Energy sanity check.
-kinetic_energy, potential_energy = model.calculate_energy(state_traj, height_traj, params)
+kinetic_energy, potential_energy = model.calculate_energy(
+    state_traj, height_traj, params
+)
 plt.figure()
 plt.plot(time_traj, potential_energy, label="Potential energy")
 plt.plot(time_traj, kinetic_energy, label="Kinetic energy")
