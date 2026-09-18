@@ -1,4 +1,6 @@
 import numpy as np
+import matplotlib
+matplotlib.use('qtagg')
 import matplotlib.pyplot as plt
 
 from models import pendulum as model
