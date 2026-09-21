@@ -9,24 +9,70 @@ import numpy as np
 
 
 def generate_params():
-    pass
+    return{
+        "gravity": 9.81,  # m/s^2
+        "length": 1.0,  # m
+        "mass": 1.0,  # kg
+        "incline": 0.06,  # rad
+        "angle_of_attack": np.pi / 8,  # rad
+        "ankle_torque": 0.0,  # N m
+    }
 
 
 def dynamics(t, state, params):
-    # TODO: implement the state derivative.
-    return np.array([0.0, 0.0])
+    angle, angular_v = state
+    gravity = params["gravity"]
+    length = params["length"]
+    mass = params["mass"]
+    ankle_torque = params["ankle_torque"]
+
+    angular_a = (gravity/length) * np.sin(angle) + ankle_torque/(mass*length**2)
+    return np.array([angular_v, angular_a])
 
 
 def event_guard(previous_state, next_state, params):
-    pass
+    alpha = params["angle_of_attack"]
+    gamma = params["incline"]
+
+    forward_angle = gamma+alpha
+    backward_angle = gamma - alpha
+
+    forward_contact = (previous_state[0] < forward_angle <= next_state[0] and next_state[1] > 0)
+    backward_contact = (previous_state[0] > backward_angle >= next_state[0] and next_state[1] < 0)
+
+    return forward_contact or backward_contact
 
 
 def event_dynamics(state, params):
-    pass
+    alpha = params["angle_of_attack"]
+    gamma = params["incline"]
+    direction = np.sign(state[1])
+
+    return np.array([gamma - direction*alpha, np.cos(2*alpha)*state[1]])
 
 
 def calculate_energy(state, params):
-    pass
+    angle, angular_velocity = np-array(state)
+    gravity = params["gravity"]
+    length = params["length"]
+    mass = params["mass"]
+    kinetic_energy = 0.5*mass*(length*angular_velocity)**2
+    potential_energy = mass*gravity*length*(np.cos(angle))
+
+    return kinetic_energy + potential_energy
+
+def refine_impact(state, t, timestep, impact_timestep, params):
+    refined_state = np.array(state, dtype=float, copy=True)
+    n_steps = int(np.ceil(impact_timestep / timestep))
+
+    for _ in range(n_steps):
+        next_state = integrator.rk4_step(t, refined_state, timestep, dynamics, params)
+        if event_guard(refined_state, next_state, params):
+            refined_state = event_dynamics(next_state, params)
+            break
+        refined_state = next_state
+        t += timestep
+        
 
 
 def visualize(
