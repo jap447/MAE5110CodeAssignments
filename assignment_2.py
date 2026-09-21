@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.animation import FuncAnimation, PillowWriter
 
+from integrators import rk4 as integrator
 from models import inverted_pendulum_walker as model
 from integrators import rk4 as integrator
 
@@ -33,37 +34,64 @@ state_traj[:, 0] = initial_state
 completed_steps = 0
 
 # Simulation loop. Replace this Euler step with your own integrator as needed.
-def simulate(initial_state, params, timestep, sim_time, balance=False):
+def simulate(
+    initial_state,
+    params,
+    timestep,
+    sim_time,
+    balance=False,
+    *,
+    impact_timestep=1e-5,
+    desired_number_of_steps=None,
+):
+
+    params = params.copy()
+    time_traj = np.append(np.arange(0.0, sim_time, timestep), sim_time)
+    state_traj = np.zeros((2, len(time_traj)))
+    state_traj[:, 0] = initial_state
+    completed_steps = 0
+
     for step, t in enumerate(time_traj[:-1]):
-        state = state_traj[:, step]
+        current_state = state_traj[:, step]
         dt = time_traj[step + 1] - t
+        params["ankle_torque"] = (
+            compute_ankle_torque(current_state, params) if balance else 0.0
+        )
 
-        next_state = integrator(model.dynamics, t, state, dt, params)
+        next_state = integrator(model.dynamics, t, current_state, dt, params)
+        state_traj[:, step + 1] = next_state
 
-        if model.event_guard(state, next_state, params):
-            impact = refine_impact(state, t, dt, impact_timestep, params)
+        if balance == False and model.event_guard(current_state, next_state, params):
+            impact_state, elapsed, contact = model.refine_impact(
+                current_state, t, dt, impact_timestep, params, integrator
+            )
+            state_traj[:, step + 1] = impact_state
 
-            impact_state, elapsed_time = impact
-            next_state = model.event_dynamics(impact_state, params)
+            if not contact:
+                continue
+
+            state_traj[:, step + 1] = model.event_dynamics(impact_state, params)
             completed_steps += 1
 
-            remaining_time = dt - elapsed_time
+            if completed_steps == desired_number_of_steps:
+                time_traj[step + 1] = t + elapsed
+                return (
+                    time_traj[:step + 2],
+                    state_traj[:, :step + 2],
+                    completed_steps,
+                )
+
+            remaining_time = dt - elapsed
             if remaining_time > 0:
-                next_state = integrator(
+                state_traj[:, step + 1] = integrator(
                     model.dynamics,
-                    t + elapsed_time,
-                    next_state,
+                    t + elapsed,
+                    state_traj[:, step + 1],
                     remaining_time,
                     params,
                 )
 
-        state_traj[:, step + 1] = next_state
-
-        if completed_steps == desired_number_of_steps:
-            break
-
-    time_traj = time_traj[:step + 2]
-    state_traj = state_traj[:, :step + 2]
+    return time_traj, state_traj, completed_steps
 
 fig, ax = plt.subplots(figsize=(8, 5), layout="constrained")
 
