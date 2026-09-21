@@ -61,6 +61,19 @@ def calculate_energy(state, params):
 
     return kinetic_energy + potential_energy
 
+def refine_impact(state, t, timestep, impact_timestep, params):
+    refined_state = np.array(state, dtype=float, copy=True)
+    n_steps = int(np.ceil(impact_timestep / timestep))
+
+    for _ in range(n_steps):
+        next_state = integrator.rk4_step(t, refined_state, timestep, dynamics, params)
+        if event_guard(refined_state, next_state, params):
+            refined_state = event_dynamics(next_state, params)
+            break
+        refined_state = next_state
+        t += timestep
+        
+
 
 def visualize(
     state,
