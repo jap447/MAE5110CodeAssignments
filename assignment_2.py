@@ -1,9 +1,11 @@
+import csv
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.animation import FuncAnimation, PillowWriter
 
+from assignment_2_validation import compare_policy_grids
 from integrators import rk4 as integrator
 from models import inverted_pendulum_walker as model
 
@@ -284,6 +286,120 @@ def build_transition_table(
     }
 
 
+def compute_minimum_step_policy(table):
+    """Find minimum footstep costs on the discretized transition graph."""
+    outcomes = table["outcomes"]
+    costs = table["step_costs"]
+    next_indices = table["next_indices"]
+    n_states, n_actions = outcomes.shape
+    steps = np.full(n_states, np.inf)
+    action_costs = np.full((n_states, n_actions), np.inf)
+    success = outcomes == "success"
+    returns = outcomes == "return"
+
+    # Propagate terminal success backward; shortest paths need no cycles.
+    for _ in range(n_states):
+        action_costs.fill(np.inf)
+        action_costs[success] = costs[success]
+        action_costs[returns] = costs[returns] + steps[next_indices[returns]]
+        updated_steps = np.min(action_costs, axis=1)
+        if np.array_equal(updated_steps, steps):
+            break
+        steps = updated_steps
+
+    action_costs.fill(np.inf)
+    action_costs[success] = costs[success]
+    action_costs[returns] = costs[returns] + steps[next_indices[returns]]
+    action_indices = np.full(n_states, -1, dtype=int)
+    selected_angles = np.full(n_states, np.nan)
+    for i in range(n_states):
+        if not np.isfinite(steps[i]):
+            continue
+        best_actions = np.flatnonzero(action_costs[i] == steps[i])
+        # Select a tested angle inside the widest contiguous group of ties.
+        groups = np.split(
+            best_actions, np.flatnonzero(np.diff(best_actions) > 1) + 1,
+        )
+        widest_group = max(groups, key=len)
+        j = widest_group[len(widest_group) // 2]
+        action_indices[i] = j
+        selected_angles[i] = table["alpha_values"][j]
+
+    return {
+        "velocity_values": table["velocity_values"],
+        "steps": steps,
+        "action_indices": action_indices,
+        "angles": selected_angles,
+    }
+
+
+def rollout_policy(
+    initial_velocity, policy, params, roa_data,
+    timestep=0.0005, max_transitions=100,
+):
+    """Execute a policy using actual section velocities, not rounded returns.
+
+    Return (status, footstrikes, section_history); this is not a full time
+    trajectory. A transition cap means unresolved, not physical failure.
+    """
+    velocities = policy["velocity_values"]
+    velocity = float(initial_velocity)
+    total_steps = 0
+    history = []
+    for _ in range(max_transitions):
+        if reached_roa([0.0, velocity], *roa_data):
+            return "success", total_steps, history
+        if not velocities[0] <= velocity <= velocities[-1]:
+            return "out_of_map", total_steps, history
+        i = np.argmin(np.abs(velocities - velocity))
+        if policy["action_indices"][i] < 0:
+            return "no_policy", total_steps, history
+
+        alpha = policy["angles"][i]
+        outcome, next_velocity, footstrikes = evaluate_transition(
+            velocity, alpha, params, roa_data, timestep=timestep,
+        )
+        history.append({
+            "velocity": velocity,
+            "alpha": alpha,
+            "outcome": outcome,
+            "next_velocity": next_velocity,
+            "footstrikes": footstrikes,
+        })
+        total_steps += footstrikes
+        if outcome != "return":
+            return outcome, total_steps, history
+        velocity = next_velocity
+
+    return "unresolved", total_steps, history
+
+
+def plot_minimum_step_policy(policy):
+    velocities = policy["velocity_values"]
+    reachable = np.isfinite(policy["steps"])
+    needs_action = reachable & (policy["steps"] > 0)
+    fig, axes = plt.subplots(
+        2, 1, sharex=True, figsize=(8, 6), layout="constrained",
+    )
+    axes[0].plot(
+        velocities, np.where(reachable, policy["steps"], np.nan),
+        "o-", markersize=3,
+    )
+    axes[0].set_ylabel("Minimum footsteps")
+    axes[0].set_title("Predicted footsteps and selected landing angle")
+    axes[1].plot(
+        velocities, np.where(needs_action, policy["angles"], np.nan),
+        "o-", markersize=3,
+    )
+    axes[1].set(
+        xlabel=r"Initial velocity $\dot{\theta}$ (rad/s)",
+        ylabel=r"Selected $\alpha$ (rad)",
+    )
+    for ax in axes:
+        ax.grid(alpha=0.2)
+    return fig, axes
+
+
 def plot_transition_table(table):
     from matplotlib.colors import BoundaryNorm, ListedColormap
     from matplotlib.patches import Patch
@@ -460,6 +576,33 @@ roa = estimate_roa(
 plot_roa(theta_values, omega_values, roa)
 # Optional timestep/horizon rechecks are in assignment_2_validation.py.
 
+validation_results = compare_policy_grids(
+    params,
+    (theta_values, omega_values, roa),
+    build_transition_table,
+    compute_minimum_step_policy,
+    rollout_policy,
+)
+
+print("\nGrid | Matching step counts | Agreement")
+for grid in sorted({row["grid"] for row in validation_results}):
+    rows = [row for row in validation_results if row["grid"] == grid]
+    matched = sum(row["matches"] for row in rows)
+    print(
+        f"{grid[0]} x {grid[1]} | "
+        f"{matched}/{len(rows)} | "
+        f"{100 * matched / len(rows):.2f}%"
+    )
+
+output = Path("output/assignment_2")
+output.mkdir(parents=True, exist_ok=True)
+validation_path = output / "grid_validation.csv"
+with validation_path.open("w", newline="") as file:
+    writer = csv.DictWriter(file, fieldnames=list(validation_results[0]))
+    writer.writeheader()
+    writer.writerows(validation_results)
+print(f"Saved {validation_path}")
+
 # Passive transitions from the forward theta = 0 section.
 velocity_values = np.linspace(
     0.0, np.sqrt(2 * params["gravity"] / params["length"]), 101,
@@ -472,6 +615,16 @@ transition_table = build_transition_table(
     roa_data=(theta_values, omega_values, roa),
 )
 table_fig, table_axes = plot_transition_table(transition_table)
+policy = compute_minimum_step_policy(transition_table)
+policy_fig, policy_axes = plot_minimum_step_policy(policy)
+status, actual_steps, policy_history = rollout_policy(
+    initial_velocity=3.0,
+    policy=policy,
+    params=params,
+    roa_data=(theta_values, omega_values, roa),
+)
+print(f"Policy rollout: {status}, {actual_steps} footsteps")
+
 outcomes, counts = np.unique(transition_table["outcomes"], return_counts=True)
 for outcome, count in zip(outcomes, counts):
     print(f"{outcome}: {count}")
@@ -492,8 +645,6 @@ if frame_indices[-1] != time_traj.size - 1:
 animation = FuncAnimation(
     fig, draw_frame, frames=frame_indices, interval=1000 / fps, repeat=False
 )
-output = Path("output/assignment_2")
-output.mkdir(parents=True, exist_ok=True)
 animation.save(output / "walker.gif", writer=PillowWriter(fps=fps))
 
 # To save an MP4 instead, install FFmpeg and use:
