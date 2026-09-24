@@ -9,7 +9,7 @@ import numpy as np
 
 
 def generate_params():
-    return{
+    return {
         "gravity": 9.81,  # m/s^2
         "length": 1.0,  # m
         "mass": 1.0,  # kg
@@ -26,7 +26,7 @@ def dynamics(t, state, params):
     mass = params["mass"]
     ankle_torque = params["ankle_torque"]
 
-    angular_a = (gravity/length) * np.sin(angle) + ankle_torque/(mass*length**2)
+    angular_a = (gravity / length) * np.sin(angle) + ankle_torque / (mass * length**2)
     return np.array([angular_v, angular_a])
 
 
@@ -34,11 +34,15 @@ def event_guard(previous_state, next_state, params):
     alpha = params["angle_of_attack"]
     gamma = params["incline"]
 
-    forward_angle = gamma+alpha
+    forward_angle = gamma + alpha
     backward_angle = gamma - alpha
 
-    forward_contact = (previous_state[0] < forward_angle <= next_state[0] and next_state[1] > 0)
-    backward_contact = (previous_state[0] > backward_angle >= next_state[0] and next_state[1] < 0)
+    forward_contact = (
+        previous_state[0] < forward_angle <= next_state[0] and next_state[1] > 0
+    )
+    backward_contact = (
+        previous_state[0] > backward_angle >= next_state[0] and next_state[1] < 0
+    )
 
     return forward_contact or backward_contact
 
@@ -48,30 +52,36 @@ def event_dynamics(state, params):
     gamma = params["incline"]
     direction = np.sign(state[1])
 
-    return np.array([gamma - direction*alpha, np.cos(2*alpha)*state[1]])
+    return np.array([gamma - direction * alpha, np.cos(2 * alpha) * state[1]])
 
 
 def calculate_energy(state, params):
-    angle, angular_velocity = np-array(state)
+    angle, angular_velocity = np.asarray(state)
     gravity = params["gravity"]
     length = params["length"]
     mass = params["mass"]
-    kinetic_energy = 0.5*mass*(length*angular_velocity)**2
-    potential_energy = mass*gravity*length*(np.cos(angle))
+    kinetic_energy = 0.5 * mass * (length * angular_velocity) ** 2
+    potential_energy = mass * gravity * length * (np.cos(angle))
 
     return kinetic_energy + potential_energy
 
-def refine_impact(state, t, timestep, impact_timestep, params):
-    refined_state = np.array(state, dtype=float, copy=True)
-    n_steps = int(np.ceil(impact_timestep / timestep))
+def refine_impact(previous_state, t, coarse_dt, fine_dt, params, integrator):
+    state = np.array(previous_state, dtype=float, copy=True)
+    elapsed = 0.0
+    n_fine_steps = int(np.ceil(coarse_dt / fine_dt))
 
-    for _ in range(n_steps):
-        next_state = integrator.rk4_step(t, refined_state, timestep, dynamics, params)
-        if event_guard(refined_state, next_state, params):
-            refined_state = event_dynamics(next_state, params)
-            break
-        refined_state = next_state
-        t += timestep
+    for step in range(n_fine_steps):
+        next_elapsed = min((step + 1) * fine_dt, coarse_dt)
+        dt = next_elapsed - elapsed
+        next_state = integrator(dynamics, t + elapsed, state, dt, params)
+        elapsed = next_elapsed
+
+        if event_guard(state, next_state, params):
+            return next_state, elapsed, True
+
+        state = next_state
+
+    return state, elapsed, False
         
 
 
